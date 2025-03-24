@@ -6,7 +6,9 @@ from datetime import (
 )  # Импортируем модуль для работы с датой и временем
 
 import telebot  # Импортируем библиотеку для работы с Telegram API
-from dotenv import dotenv_values
+from dotenv import (
+    dotenv_values,
+)  # Импортируем функцию для загрузки переменных окружения
 from telebot.types import (
     ReplyKeyboardMarkup,
     InlineKeyboardMarkup,
@@ -14,17 +16,16 @@ from telebot.types import (
     Message,
     InlineKeyboardButton,
     CallbackQuery,
+)  # Импортируем необходимые типы из telebot для создания кнопок и обработки сообщений
+
+config = dotenv_values(".env")  # Загружаем переменные окружения из файла .env
+# Создаем экземпляр Telegram-бота с токеном, указанным в переменной окружения BOT_TOKEN
+bot = telebot.TeleBot(config.get("BOT_TOKEN"))
+# Указываем путь к изображению (сырая строка для корректной обработки обратных слешей)
+image_path = (
+    r"C:\Users\roman\AppData\Roaming\Telegram Desktop\photo_2025-03-24_15-50-12"
 )
-
-config = dotenv_values(".env")
-
-# Импортируем необходимые типы из telebot для создания кнопок и обработки сообщений
-
-bot = telebot.TeleBot(
-    config.get("BOT_TOKEN")
-)  # Создаем экземпляр Telegram-бота с указанным токеном
-image_path = r"C:\Users\roman\AppData\Roaming\Telegram Desktop\photo_2025-03-24_15-50-12"  # Указываем путь к изображению (сырая строка для корректной обработки обратных слешей)
-master_id = 1111853817
+master_id = 1111853817  # ID мастера, которому будут отправляться уведомления о записях
 welcome_text = 'Привет! Я бот-помощник Мастера Виолетты @V_COBALT_V. Рад приветствовать! Как я могу помочь сегодня? (На данный момент я в стадии активной разработки и буду очень рад Вашей помощи с улучшением моей работы. В случае обнаружения любых неподалок или же ошибок, пожалуйста нажмите "Нашла ошибку" и подробно опишите ее. Виолетта и разработчики обязательно это увидят и сделаю все, чтобы исправить ошибку. Спасибо за ваше понимание и помощь, мы очень ценим это'
 
 
@@ -42,8 +43,7 @@ def init_database():
         "CREATE TABLE IF NOT EXISTS users(user_id longint, nickname string)"
     )  # Создаем таблицу users, если её нет (хранит данные о пользователях)
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS entries(datetime timestemp, user_id longint, description text, istemporary "
-        "boolean, isapproved boolean)"
+        "CREATE TABLE IF NOT EXISTS entries(datetime timestemp, user_id longint, description text, istemporary boolean, isapproved boolean)"
     )  # Создаем таблицу entries, если её нет (хранит записи пользователей)
     con.commit()  # Сохраняем изменения в базе данных
 
@@ -55,10 +55,12 @@ init_database()  # Вызываем функцию для инициализац
 def welcome_send(
     message: Message,
 ):  # Функция, которая вызывается при получении этих команд
-    con, cur = get_db()
-    res = cur.execute(f"SELECT * FROM entries")
-    res = res.fetchall()
-    print(res)
+    con, cur = get_db()  # Подключаемся к базе данных
+    res = cur.execute(
+        f"SELECT * FROM entries"
+    )  # Извлекаем все записи из таблицы entries
+    res = res.fetchall()  # Получаем результат запроса
+    print(res)  # Выводим результат в консоль для отладки
     markup = ReplyKeyboardMarkup(
         resize_keyboard=True
     )  # Создаем клавиатуру с адаптивным размером
@@ -84,20 +86,22 @@ def handler_text(
             message.from_user.id, "Ща запишу"
         )  # Отправляем сообщение о начале записи
         datetime_now = datetime.now()  # Получаем текущую дату и время
-        markup = InlineKeyboardMarkup()
+        markup = InlineKeyboardMarkup()  # Создаем Inline-клавиатуру
         current_month = InlineKeyboardButton(
             datetime_now.strftime("%B"),
             callback_data=f"calendary|{datetime_now.month}",
-        )
-        datetime_now = datetime_now + timedelta(days=31)
+        )  # Кнопка для выбора текущего месяца
+        datetime_now = datetime_now + timedelta(
+            days=31
+        )  # Прибавляем месяц к текущей дате
         next_month = InlineKeyboardButton(
             datetime_now.strftime("%B"), callback_data=f"calendary|{datetime_now.month}"
-        )
+        )  # Кнопка для выбора следующего месяца
         markup.add(current_month, next_month)  # Добавляем кнопки на клавиатуру
         bot.send_message(
             message.from_user.id,
-            "выберите месяц:",  # Предлагаем выбрать дату
-            reply_markup=markup,  # Отправляем клавиатуру с календарем
+            "выберите месяц:",  # Предлагаем выбрать месяц
+            reply_markup=markup,  # Отправляем клавиатуру с месяцами
         )
     elif (
         message.text == "Просмотр записей"
@@ -133,20 +137,22 @@ def handler_text(
         con.commit()  # Сохраняем изменения в базе данных
         bot.send_message(message.from_user.id, "Ваша запись на подтверждении")
         print(res)
-        date = datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S")
-        markup = InlineKeyboardMarkup()
+        date = datetime.strptime(
+            res[0], "%Y-%m-%d %H:%M:%S"
+        )  # Преобразуем дату из строки
+        markup = InlineKeyboardMarkup()  # Создаем Inline-клавиатуру
         approve = InlineKeyboardButton(
             "Подтвердить", callback_data=f"approve|{message.from_user.id}"
-        )
+        )  # Кнопка для подтверждения записи
         decline = InlineKeyboardButton(
             "Послать нахуй", callback_data=f"decline|{message.from_user.id}"
-        )
+        )  # Кнопка для отклонения записи
         markup.add(approve, decline)  # Добавляем кнопки на клавиатуру
         bot.send_message(
             master_id,
-            f"Требуется подтвердить запись \nДата записи: {date.strftime('%d-%m-%Y')}\nВремя записи: {date.strftime('%H-%M')}\nОписание: {message.text}",
+            f"Требуется подтвердить запись\nДата записи: {date.strftime('%d-%m-%Y')}\nВремя записи: {date.strftime('%H-%M')}\nОписание: {message.text}",
             reply_markup=markup,
-        )
+        )  # Отправляем уведомление мастеру
 
 
 @bot.callback_query_handler(
@@ -160,9 +166,9 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
     if (
         "day|" in call.data and "time|" not in call.data
     ):  # Если выбран день (но не выбрано время)
-        temp = call.data.split(" ")
-        day = temp[0].split("|")[1]
-        month = temp[1].split("|")[1]
+        temp = call.data.split(" ")  # Разбираем callback_data на части
+        day = temp[0].split("|")[1]  # Получаем номер дня
+        month = temp[1].split("|")[1]  # Получаем номер месяца
         bot.send_message(
             call.from_user.id,
             "Выберите время:",  # Предлагаем выбрать время
@@ -174,7 +180,7 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
         temp = call.data.split(" ")  # Разбираем callback_data на части
         day = temp[0].split("|")[1]  # Получаем номер дня
         time = temp[1].split("|")[1]  # Получаем время
-        month = int(temp[2].split("|")[1])
+        month = int(temp[2].split("|")[1])  # Получаем номер месяца
         data_time = datetime(
             year=datetime_now.year,
             month=month,
@@ -185,59 +191,65 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
         con, cur = get_db()  # Подключаемся к базе данных
         res = cur.execute(
             f"SELECT user_id FROM entries WHERE datetime = '{data_time}'"
-        ).fetchone()
+        ).fetchone()  # Проверяем, занято ли время
         print(res)
-        if res is not None:
+        if res is not None:  # Если время занято
             bot.send_message(call.from_user.id, "Время занято")
             return
         con, cur = get_db()  # Подключаемся к базе данных
         cur.execute(
             f"INSERT INTO entries (istemporary, user_id, datetime) VALUES(TRUE, {call.from_user.id}, '{data_time}')"
-        )  # Добавляем временную запись в базу данных`
+        )  # Добавляем временную запись в базу данных
         con.commit()  # Сохраняем изменения
         bot.send_message(
             call.from_user.id, "Напишите ваши пожелания:"
         )  # Просим пользователя написать пожелания
     elif "back" in call.data:  # Если нажата кнопка "К выбору даты"
         datetime_now = datetime.now()  # Получаем текущую дату и время
-        markup = InlineKeyboardMarkup()
+        markup = InlineKeyboardMarkup()  # Создаем Inline-клавиатуру
         current_month = InlineKeyboardButton(
             datetime_now.strftime("%B"),
             callback_data=f"calendary|{datetime_now.month}",
-        )
-        datetime_now = datetime_now + timedelta(days=31)
+        )  # Кнопка для выбора текущего месяца
+        datetime_now = datetime_now + timedelta(
+            days=31
+        )  # Прибавляем месяц к текущей дате
         next_month = InlineKeyboardButton(
             datetime_now.strftime("%B"), callback_data=f"calendary|{datetime_now.month}"
-        )
+        )  # Кнопка для выбора следующего месяца
         markup.add(current_month, next_month)  # Добавляем кнопки на клавиатуру
         bot.send_message(
             call.from_user.id,
-            "выберите месяц:",  # Предлагаем выбрать дату
-            reply_markup=markup,  # Отправляем клавиатуру с календарем
+            "выберите месяц:",  # Предлагаем выбрать месяц
+            reply_markup=markup,  # Отправляем клавиатуру с месяцами
         )
-    elif "approve" in call.data:
-        user_id = call.data.split("|")[1]
+    elif "approve" in call.data:  # Если нажата кнопка "Подтвердить"
+        user_id = call.data.split("|")[1]  # Получаем ID пользователя
         con, cur = get_db()  # Подключаемся к базе данных
-        cur.execute(f"UPDATE entries SET isapproved = TRUE WHERE user_id={user_id}")
+        cur.execute(
+            f"UPDATE entries SET isapproved = TRUE WHERE user_id={user_id}"
+        )  # Подтверждаем запись
         con.commit()  # Сохраняем изменения в базе данных
-        bot.send_message(int(user_id), "Ваша запись подтверждена")
-    elif "decline" in call.data:
-        user_id = call.data.split("|")[1]
+        bot.send_message(
+            int(user_id), "Ваша запись подтверждена"
+        )  # Уведомляем пользователя
+    elif "decline" in call.data:  # Если нажата кнопка "Послать нахуй"
+        user_id = call.data.split("|")[1]  # Получаем ID пользователя
         con, cur = get_db()  # Подключаемся к базе данных
         cur.execute(
             f"DELETE FROM entries WHERE user_id={user_id} and isapproved is NOT TRUE"
-        )
+        )  # Удаляем запись
         con.commit()  # Сохраняем изменения в базе данных
-        bot.send_message(int(user_id), "Вы пошли нахуй")
-    elif "calendary" in call.data:
-        month = int(call.data.split("|")[1])
-        print(month)
-        datetime_now = datetime.now()
+        bot.send_message(int(user_id), "Вы пошли нахуй")  # Уведомляем пользователя
+    elif "calendary" in call.data:  # Если выбран месяц
+        month = int(call.data.split("|")[1])  # Получаем номер месяца
+        print(month)  # Выводим номер месяца в консоль для отладки
+        datetime_now = datetime.now()  # Получаем текущую дату и время
         bot.send_message(
             call.from_user.id,
-            "Выберите дату:",
+            "Выберите дату:",  # Предлагаем выбрать дату
             reply_markup=create_calendar(year=datetime_now.year, month=month),
-        )
+        )  # Отправляем клавиатуру с календарем
 
 
 def create_calendar(year, month):
