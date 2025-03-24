@@ -1,6 +1,9 @@
 import sqlite3  # Импортируем библиотеку для работы с SQLite базой данных
 from calendar import monthcalendar  # Импортируем функцию для генерации календаря
-from datetime import datetime  # Импортируем модуль для работы с датой и временем
+from datetime import (
+    datetime,
+    timedelta,
+)  # Импортируем модуль для работы с датой и временем
 
 import telebot  # Импортируем библиотеку для работы с Telegram API
 from dotenv import dotenv_values
@@ -81,12 +84,20 @@ def handler_text(
             message.from_user.id, "Ща запишу"
         )  # Отправляем сообщение о начале записи
         datetime_now = datetime.now()  # Получаем текущую дату и время
+        markup = InlineKeyboardMarkup()
+        current_month = InlineKeyboardButton(
+            datetime_now.strftime("%B"),
+            callback_data=f"calendary|{datetime_now.month}",
+        )
+        datetime_now = datetime_now + timedelta(days=31)
+        next_month = InlineKeyboardButton(
+            datetime_now.strftime("%B"), callback_data=f"calendary|{datetime_now.month}"
+        )
+        markup.add(current_month, next_month)  # Добавляем кнопки на клавиатуру
         bot.send_message(
             message.from_user.id,
-            "выберите дату:",  # Предлагаем выбрать дату
-            reply_markup=create_calendar(
-                datetime_now.year, datetime_now.month
-            ),  # Отправляем клавиатуру с календарем
+            "выберите месяц:",  # Предлагаем выбрать дату
+            reply_markup=markup,  # Отправляем клавиатуру с календарем
         )
     elif (
         message.text == "Просмотр записей"
@@ -149,21 +160,24 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
     if (
         "day|" in call.data and "time|" not in call.data
     ):  # Если выбран день (но не выбрано время)
-        day = call.data.split("|")[1]  # Получаем номер дня из callback_data
+        temp = call.data.split(" ")
+        day = temp[0].split("|")[1]
+        month = temp[1].split("|")[1]
         bot.send_message(
             call.from_user.id,
             "Выберите время:",  # Предлагаем выбрать время
             reply_markup=create_entries(
-                day
+                day, month
             ),  # Отправляем клавиатуру с временными слотами
         )
     elif "time|" in call.data:  # Если выбрано время
         temp = call.data.split(" ")  # Разбираем callback_data на части
         day = temp[0].split("|")[1]  # Получаем номер дня
         time = temp[1].split("|")[1]  # Получаем время
+        month = int(temp[2].split("|")[1])
         data_time = datetime(
             year=datetime_now.year,
-            month=datetime_now.month,
+            month=month,
             day=int(day),
             hour=int(time.split(":")[0]),
             minute=int(time.split(":")[1]),
@@ -185,12 +199,21 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
             call.from_user.id, "Напишите ваши пожелания:"
         )  # Просим пользователя написать пожелания
     elif "back" in call.data:  # Если нажата кнопка "К выбору даты"
+        datetime_now = datetime.now()  # Получаем текущую дату и время
+        markup = InlineKeyboardMarkup()
+        current_month = InlineKeyboardButton(
+            datetime_now.strftime("%B"),
+            callback_data=f"calendary|{datetime_now.month}",
+        )
+        datetime_now = datetime_now + timedelta(days=31)
+        next_month = InlineKeyboardButton(
+            datetime_now.strftime("%B"), callback_data=f"calendary|{datetime_now.month}"
+        )
+        markup.add(current_month, next_month)  # Добавляем кнопки на клавиатуру
         bot.send_message(
             call.from_user.id,
-            "выберите дату:",  # Предлагаем снова выбрать дату
-            reply_markup=create_calendar(
-                datetime_now.year, datetime_now.month
-            ),  # Отправляем клавиатуру с календарем
+            "выберите месяц:",  # Предлагаем выбрать дату
+            reply_markup=markup,  # Отправляем клавиатуру с календарем
         )
     elif "approve" in call.data:
         user_id = call.data.split("|")[1]
@@ -206,6 +229,15 @@ def callback(call: CallbackQuery):  # Функция, которая вызыв�
         )
         con.commit()  # Сохраняем изменения в базе данных
         bot.send_message(int(user_id), "Вы пошли нахуй")
+    elif "calendary" in call.data:
+        month = int(call.data.split("|")[1])
+        print(month)
+        datetime_now = datetime.now()
+        bot.send_message(
+            call.from_user.id,
+            "Выберите дату:",
+            reply_markup=create_calendar(year=datetime_now.year, month=month),
+        )
 
 
 def create_calendar(year, month):
@@ -230,7 +262,7 @@ def create_calendar(year, month):
         week_buttons = []
         for day in week:  # Проходим по каждому дню недели
             text = day
-            call = "day|" + str(day)  # Формируем callback_data для кнопки
+            call = f"day|{day} month|{month}"  # Формируем callback_data для кнопки
             if day == 0:  # Если день равен 0 (пустой слот)
                 text = " "
                 call = "ignore"  # Устанавливаем callback_data на "ignore"
@@ -241,13 +273,15 @@ def create_calendar(year, month):
     return markup  # Возвращаем созданную клавиатуру
 
 
-def create_entries(day):
+def create_entries(day, month):
     markup = InlineKeyboardMarkup()  # Создаем Inline-клавиатуру
     entries = ["10:00", "13:00", "16:00", "19:00"]  # Список временных слотов
     hour_buttons = []
     for time in entries:
         hour_buttons.append(
-            InlineKeyboardButton(time, callback_data=f"day|{day} time|{time}")
+            InlineKeyboardButton(
+                time, callback_data=f"day|{day} time|{time} month|{month}"
+            )
         )  # Добавляем кнопки
     markup.row(*hour_buttons)  # Добавляем строку с временными слотами
     markup.row(
